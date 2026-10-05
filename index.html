@@ -1,0 +1,311 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Med Deck"><meta name="theme-color" content="#1f6f5c">
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="icon" href="icon-192.png">
+<title>Home Health Med Deck</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans+KR:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;padding-top:env(safe-area-inset-top)}
+/* layout: header + tools row, then a list of drug rows grouped by class; flashcard mode swaps the list */
+:root{--bg:#f6f7f5;--panel:#fff;--fg:#1d2522;--muted:#5d6b66;--line:#dde3e0;--accent:#1f6f5c;--warn:#a5422a;--chip:#e7efec;
+--display:"Fraunces",Georgia,serif;--body:"IBM Plex Sans KR",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121816;--panel:#1a2320;--fg:#e4ebe8;--muted:#9aaaa4;--line:#2c3834;--accent:#6cc4a9;--warn:#e98a6f;--chip:#22302b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121816;--panel:#1a2320;--fg:#e4ebe8;--muted:#9aaaa4;--line:#2c3834;--accent:#6cc4a9;--warn:#e98a6f;--chip:#22302b;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body)}
+.wrap{max-width:900px;margin:0 auto;padding-inline:16px;padding-block:28px 60px}
+h1{font:600 2rem/1.15 var(--display);margin:0 0 6px;text-wrap:balance}
+.sub{color:var(--muted);margin:0 0 18px;max-width:65ch}
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+input,select,button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+input{flex:1 1 220px;min-width:0}
+button{cursor:pointer}button.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-bottom:18px}
+.tag{font:500 11px var(--mono);letter-spacing:.04em;padding:2px 6px;border-radius:4px;background:var(--chip);color:var(--accent)}
+.tag.hi{color:var(--warn)}
+h2{font:600 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:26px 0 6px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,2fr);gap:4px 18px;padding:10px 0;border-bottom:1px solid var(--line)}
+.g{font-weight:600}.b{color:var(--accent);font-size:14px}.ko{font-size:14px}.tip{font-size:13px;color:var(--muted)}
+.row .tag{margin-left:6px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:32px 24px;text-align:center;min-height:220px;display:grid;place-items:center;cursor:pointer}
+.card .q{font:600 1.8rem var(--display)}.card .a{display:grid;gap:6px}
+.nav{display:flex;justify-content:center;gap:8px;margin-top:12px;align-items:center;color:var(--muted);font-variant-numeric:tabular-nums}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:22px;font-size:14px}
+.box b{color:var(--warn)}
+.say{display:inline-grid;place-items:center;width:30px;height:30px;padding:0;margin-left:6px;border-radius:50%;vertical-align:middle;color:var(--accent)}.say svg{width:16px;height:16px}.say.play{background:var(--accent);color:var(--bg)}
+</style>
+</head><body><div class="wrap">
+<h1>Home Health Med Deck</h1>
+<p class="sub">환자 약 목록에 실제로 나온 약 + 홈헬스에서 자주 보는 약들을 성분명 · 상품명 · 분류로 정리했어요. 미국에선 대부분 generic(성분명)으로 부르지만 상품명도 알아두면 환자/가족과 대화할 때 편해요. 환자 정보는 하나도 넣지 않았습니다. 🔈 버튼을 누르면 미국식 발음으로 읽어주고, 한 번 더 누르면 천천히 읽어줘요.</p>
+<div class="tools">
+<input id="q" placeholder="검색: apixaban, Eliquis, 혈당…" aria-label="Search">
+<select id="cls" aria-label="Class"></select>
+<button id="mList" class="on">List</button><button id="mCard">Flashcards</button>
+</div>
+<div class="legend"><span><span class="tag hi">HIGH ALERT</span> 출혈·저혈당·호흡억제 위험</span><span><span class="tag">BRAND≈GENERIC</span> 현장에서 상품명으로도 자주 부름</span></div>
+<div id="list"></div>
+<div id="cards" hidden>
+<div class="card" id="card" tabindex="0"></div>
+<div class="nav"><button id="prev">←</button><span id="pos"></span><button id="next">→</button><button id="shuf">Shuffle</button></div>
+</div>
+<div class="box">
+<p><b>약어 (Med list 범례 & Sig)</b> — LS: longstanding · (N): 30일 내 새로 추가 · (C): 60일 내 용량 변경 · PRN: as needed · QD/daily · BID 2x · TID 3x · QID 4x · Q6H 6시간마다 · HS: at bedtime · AC: 식전 · PO: by mouth · SubQ/SC: 피하 · SOB: 숨참 · SBP: 수축기혈압 · BS: blood sugar · OTC: 처방 없이 · HF: heart failure</p>
+<p><b>Home visit 체크 습관</b> — "Skip if SBP &lt;110" 같은 hold parameter 확인 · 항응고제 환자는 출혈 징후(멍, 흑변, 잇몸출혈) · 인슐린/glipizide 환자는 저혈당 증상 · opioid 있으면 naloxone 위치 확인 · 이뇨제는 daily weight.</p>
+</div>
+</div>
+<script>
+const D=[
+// [generic, brand, class, 한국어 용도, tip, flags]
+["Apixaban","Eliquis","Anticoagulant","항응고제 (혈전 예방, AFib)","출혈 징후 체크. 수술 전 hold 여부 확인.","hi,b"],
+["Rivaroxaban","Xarelto","Anticoagulant","항응고제","저녁 식사와 함께 복용.","hi,b"],
+["Clopidogrel","Plavix","Antiplatelet","항혈소판제 (스텐트 후)","출혈 체크.","b"],
+["Aspirin 81 mg","Bayer (baby aspirin)","Antiplatelet / Analgesic","저용량 항혈소판","항응고제와 병용 시 출혈 위험↑.",""],
+["Pentoxifylline","Trental","Hematologic","말초혈류 개선 (claudication)","식사와 함께.",""],
+["Metformin","Glucophage","Antidiabetic","당뇨 1차 약","GI 부작용, 조영제 전 hold.",""],
+["Empagliflozin","Jardiance","Antidiabetic (SGLT2i)","당뇨 + 심부전/신장 보호","UTI·곰팡이감염·탈수 주의.","b"],
+["Glipizide","Glucotrol","Antidiabetic (sulfonylurea)","인슐린 분비 촉진","저혈당! 식전 30분.","hi"],
+["Pioglitazone","Actos","Antidiabetic (TZD)","인슐린 감수성↑","부종·체중증가 → HF 악화 주의.",""],
+["Acarbose","Precose","Antidiabetic","탄수화물 흡수 지연","첫 숟가락과 함께 복용. 저혈당 시 glucose(포도당)로 교정.",""],
+["Insulin glargine","Lantus / Semglee(-yfgn)","Long-acting insulin","기저 인슐린 (하루 1회)","저혈당 체크. 다른 인슐린과 섞지 않음.","hi,b"],
+["Insulin aspart","NovoLog","Rapid-acting insulin","식전 인슐린 / sliding scale","식사 5–10분 전. BS 측정 후 scale대로.","hi,b"],
+["Glucose tablets 4 g","Dex4","Antidiabetic rescue","저혈당 응급용","BS<70 → 15 g(4정) → 15분 후 재측정.",""],
+["Amlodipine","Norvasc","Calcium channel blocker","혈압약","발목 부종. SBP hold parameter 확인.",""],
+["Losartan","Cozaar","ARB","혈압약, 신장 보호","K+↑, 어지러움.",""],
+["Lisinopril","Zestril / Prinivil","ACE inhibitor","혈압약","마른기침, 혈관부종(angioedema) 주의.",""],
+["Lisinopril-HCTZ","Zestoretic","ACEi + thiazide","복합 혈압약","전해질, 탈수.",""],
+["Hydralazine","Apresoline","Vasodilator","혈압약 (TID)","빈맥, 두통.",""],
+["Metoprolol succinate ER","Toprol XL","Beta blocker","HR·혈압, 심부전","쪼개 먹을 수 있지만 씹지 않기. HR<60 확인.",""],
+["Metoprolol tartrate","Lopressor","Beta blocker","HR·혈압 (BID)","succinate와 혼동 주의!",""],
+["Carvedilol","Coreg","Beta blocker","심부전, 혈압","음식과 함께. 기립성 저혈압.",""],
+["Furosemide","Lasix","Loop diuretic","이뇨제 (부종, HF)","Daily weight, K+↓. 아침에 복용.","b"],
+["Torsemide","Demadex","Loop diuretic","이뇨제","Lasix와 같은 계열.",""],
+["Spironolactone","Aldactone","K-sparing diuretic","HF, 부종","K+↑ (ARB/ACEi 병용 주의).",""],
+["Potassium chloride ER","K-Dur / Klor-Con","Electrolyte","칼륨 보충","통째로 삼키기, 물 충분히.",""],
+["Atorvastatin","Lipitor","Statin","콜레스테롤","근육통 보고 시 알림.","b"],
+["Rosuvastatin","Crestor","Statin","콜레스테롤","",""],
+["Lovastatin","Mevacor","Statin","콜레스테롤","저녁 식사와 함께.",""],
+["Amiodarone","Pacerone","Antiarrhythmic","부정맥","갑상선·폐·간 독성.",""],
+["Tamsulosin","Flomax","Alpha blocker (BPH)","전립선비대 (배뇨)","취침 시, 기립성 저혈압·낙상.","b"],
+["Alfuzosin ER","Uroxatral","Alpha blocker (BPH)","전립선비대","",""],
+["Finasteride","Proscar","5-alpha reductase inhibitor","전립선 크기↓","임신 가능 여성은 부서진 정제 만지지 않기.",""],
+["Oxybutynin","Ditropan","Urinary antispasmodic","과민성 방광","노인 혼동·변비·구강건조.",""],
+["Sildenafil","Viagra","PDE5 inhibitor","발기부전","nitrate와 절대 병용 금지.",""],
+["Allopurinol","Zyloprim","Gout (xanthine oxidase)","요산↓, 통풍 예방","물 많이, 발진 시 중단 보고.",""],
+["Colchicine","Colcrys","Gout","통풍 발작 치료/예방","설사 = 독성 신호.",""],
+["Acetaminophen","Tylenol","Analgesic","진통·해열","하루 최대 3–4 g. 복합제(Percocet 등) 속 성분도 합산!","b"],
+["Ibuprofen","Advil / Motrin","NSAID","진통·소염","신장, 위출혈, 항응고제 병용 주의.","b"],
+["Celecoxib","Celebrex","NSAID (COX-2)","관절염 진통","심혈관 위험.",""],
+["Diclofenac 1% gel","Voltaren","Topical NSAID","관절통 연고","dosing card로 계량.","b"],
+["Lidocaine 5% patch","Lidoderm","Topical anesthetic","국소 통증 패치","12시간 붙이고 12시간 뗌.",""],
+["Oxycodone-APAP","Percocet","Opioid","중증 통증","호흡억제, 변비. Naloxone 비치.","hi,b"],
+["Hydrocodone-APAP","Norco / Vicodin","Opioid","중등도~중증 통증","호흡억제.","hi,b"],
+["Naloxone nasal","Narcan","Opioid antagonist","opioid 과다 해독 응급","911 먼저, 2–3분 후 반복 가능.","b"],
+["Methocarbamol","Robaxin","Muscle relaxant","근육 이완","졸림, 낙상.",""],
+["Gabapentin","Neurontin","Anticonvulsant","신경통","졸림, 어지러움.",""],
+["Pregabalin","Lyrica","Anticonvulsant","신경통","갑자기 끊지 않기.",""],
+["Duloxetine","Cymbalta","SNRI antidepressant","우울 + 신경통/만성통증","갑자기 중단 금지.",""],
+["Trazodone","Desyrel","Antidepressant","주로 수면 보조","기립성 저혈압.",""],
+["Mirtazapine","Remeron","Antidepressant","우울, 식욕↑, 수면","취침 시.",""],
+["Aripiprazole","Abilify","Antipsychotic","우울 보조요법","",""],
+["Buspirone","Buspar","Anxiolytic","불안","식사와 일정하게.",""],
+["Lorazepam","Ativan","Benzodiazepine","불안·초조","opioid 병용 시 호흡억제, 낙상.","hi,b"],
+["Donepezil","Aricept","Cholinesterase inhibitor","치매 (Alzheimer)","취침 시, 서맥.","b"],
+["Carbidopa-levodopa","Sinemet","Antiparkinson","파킨슨","시간 정확히! 고단백 식사와 간격.","b"],
+["Dextroamphetamine","Dexedrine","CNS stimulant","ADHD/기면, 피로","Controlled substance.",""],
+["Levothyroxine","Synthroid","Thyroid","갑상선 저하","아침 공복, 식전 30–60분, 철분·칼슘과 4시간 간격.","b"],
+["Hydroxyurea","Hydrea","Antineoplastic","진성다혈증(polycythemia)","장갑 끼고 취급!","hi"],
+["Anagrelide","Agrylin","Hematologic","혈소판↓","",""],
+["Omeprazole","Prilosec","PPI","위산 억제","식전 30–60분.","b"],
+["Pantoprazole","Protonix","PPI","위산 억제","식전.","b"],
+["Lansoprazole","Prevacid","PPI","위산 억제","",""],
+["Rabeprazole","Aciphex","PPI","위산 억제 (한 환자 알러지)","",""],
+["Famotidine","Pepcid","H2 blocker","위산 억제","취침 시.",""],
+["Simethicone","Gas-X","GI","가스","씹어서.",""],
+["Senna / sennosides","Senokot","Stimulant laxative","변비","opioid 환자 기본.",""],
+["Senna-docusate","Senokot-S / Senna Plus","Laxative combo","변비","",""],
+["Docusate","Colace","Stool softener","대변 연화","",""],
+["Polyethylene glycol 3350","MiraLAX","Osmotic laxative","변비","17 g + 물 8 oz.","b"],
+["Psyllium","Metamucil","Bulk laxative","섬유질 변비","물 충분히, 다른 약과 간격.",""],
+["Lactulose","Enulose","Osmotic laxative","변비 / 간성뇌증",""," "],
+["Loperamide","Imodium","Antidiarrheal","설사","",""],
+["Lactobacillus","Culturelle","Probiotic","장 건강, 항생제 설사 예방","",""],
+["Sulfamethoxazole-TMP","Bactrim DS","Antibiotic","UTI, 피부감염","물 많이, K+↑, 햇빛.","b"],
+["Cephalexin","Keflex","Cephalosporin","피부감염","",""],
+["Cefpodoxime","Vantin","Cephalosporin","UTI","",""],
+["Clindamycin","Cleocin","Antibiotic","피부감염","C. diff 설사 주의.",""],
+["Doxycycline","Vibramycin","Tetracycline","감염","제산제·유제품·철분과 간격, 햇빛.",""],
+["Amoxicillin","Amoxil","Penicillin","감염","",""],
+["Amox-clavulanate","Augmentin","Penicillin","감염 (한 환자 알러지)","",""],
+["Meropenem IV","Merrem","Carbapenem","중증감염 IV (PICC)","Home infusion. NS flush 전후.",""],
+["Albuterol HFA","ProAir / Ventolin","Bronchodilator (rescue)","급성 숨참","HR↑, 떨림.","b"],
+["Fluticasone-salmeterol","Advair","ICS + LABA","COPD/천식 유지","사용 후 입 헹굼.","b"],
+["Tiotropium","Spiriva","LAMA","COPD 유지","",""],
+["Fluticasone nasal","Flonase","Nasal steroid","코막힘","",""],
+["Oxygen","—","Respiratory","산소 (LPM)","화기 금지, 튜브 낙상.",""],
+["Cetirizine","Zyrtec","Antihistamine","알러지","",""],
+["Loratadine","Claritin","Antihistamine","알러지","",""],
+["Ketorolac eye drop","Acular","Ophthalmic NSAID","눈 수술 후 염증","점안제 사이 5분 간격.",""],
+["Prednisolone acetate eye drop","Pred Forte","Ophthalmic steroid","눈 염증","흔들어서 사용.",""],
+["Ofloxacin eye drop","Ocuflox","Ophthalmic antibiotic","눈 감염 예방","",""],
+["Erythromycin eye oint","Ilotycin","Ophthalmic antibiotic","눈 감염","",""],
+["Cyclosporine eye drop","Restasis","Ophthalmic","안구건조","",""],
+["Carboxymethylcellulose","Refresh","Artificial tears","인공눈물","",""],
+["Triamcinolone 0.1% cream","Kenalog","Topical steroid","피부염","열린 상처엔 X.",""],
+["Clotrimazole","Lotrimin","Topical antifungal","곰팡이 감염","",""],
+["Ketoconazole 2%","Nizoral","Topical antifungal","비듬 샴푸","5분 두고 헹굼.",""],
+["Vashe","Vashe","Wound cleanser","상처 세척","",""],
+["Ferrous sulfate","Feosol","Iron","빈혈","검은 변 정상, 변비. 공복이 흡수 좋음.",""],
+["Folic acid","—","Vitamin","엽산","",""],
+["Cyanocobalamin","—","Vitamin B12","B12 보충","",""],
+["Cholecalciferol","—","Vitamin D3","비타민 D","",""],
+["Magnesium oxide","Mag-Ox","Mineral","다리 쥐, Mg 보충","설사.",""],
+["Zinc","—","Mineral","상처 치유 보조","",""],
+["Thiamine","—","Vitamin B1","알코올 관련 결핍 등","",""],
+["Warfarin","Coumadin","Anticoagulant","항응고제 (INR 모니터)","INR 2–3 목표, 비타민K 음식 일정하게.","hi,b"],
+["Dabigatran","Pradaxa","Anticoagulant","항응고제","캡슐 열지 않기.","hi"],
+["Enoxaparin","Lovenox","Anticoagulant (LMWH)","피하주사 항응고제","복부 주사, 공기방울 빼지 않기, 문지르지 않기.","hi,b"],
+["Heparin flush","Hep-Lock","Anticoagulant","중심정맥관 flush","농도 반드시 확인.","hi"],
+["Ticagrelor","Brilinta","Antiplatelet","스텐트 후","",""],
+["Digoxin","Lanoxin","Cardiac glycoside","심부전·AFib 심박수 조절","투약 전 apical pulse 1분, <60 hold. 독성: 구역, 시야 노랑.","hi,b"],
+["Isosorbide mononitrate","Imdur","Nitrate","협심증 예방","Viagra 병용 금지, 두통.",""],
+["Nitroglycerin SL","Nitrostat","Nitrate","흉통 응급","5분 간격 최대 3회, 안 나으면 911.","b"],
+["Diltiazem","Cardizem","Calcium channel blocker","AFib 심박수, 혈압","HR·BP 확인.","b"],
+["Hydrochlorothiazide","Microzide (HCTZ)","Thiazide diuretic","혈압약","K+↓, 탈수.",""],
+["Chlorthalidone","Thalitone","Thiazide-like diuretic","혈압약","",""],
+["Bumetanide","Bumex","Loop diuretic","이뇨제","Lasix보다 40배 강함.",""],
+["Sacubitril-valsartan","Entresto","ARNI","심부전","ACEi와 36시간 간격, 저혈압·K+↑.","b"],
+["Valsartan","Diovan","ARB","혈압약","",""],
+["Olmesartan","Benicar","ARB","혈압약","",""],
+["Benazepril","Lotensin","ACE inhibitor","혈압약","",""],
+["Clonidine","Catapres","Central alpha agonist","혈압약","갑자기 끊으면 반동성 고혈압.",""],
+["Atenolol","Tenormin","Beta blocker","혈압","",""],
+["Propranolol","Inderal","Beta blocker (non-selective)","혈압, 떨림","천식 환자 주의.",""],
+["Ezetimibe","Zetia","Cholesterol absorption inhibitor","콜레스테롤","",""],
+["Simvastatin","Zocor","Statin","콜레스테롤","저녁, 자몽주스 X.",""],
+["Pravastatin","Pravachol","Statin","콜레스테롤","",""],
+["Sitagliptin","Januvia","Antidiabetic (DPP-4i)","당뇨","",""],
+["Dapagliflozin","Farxiga","Antidiabetic (SGLT2i)","당뇨, HF, CKD","UTI·탈수.","b"],
+["Semaglutide","Ozempic / Rybelsus","GLP-1 agonist","당뇨, 체중","주 1회 주사, 구역.","b"],
+["Dulaglutide","Trulicity","GLP-1 agonist","당뇨","주 1회 주사.","b"],
+["Tirzepatide","Mounjaro","GIP/GLP-1 agonist","당뇨, 체중","주 1회.","b"],
+["Glimepiride","Amaryl","Sulfonylurea","당뇨","저혈당.","hi"],
+["Insulin lispro","Humalog","Rapid-acting insulin","식전 인슐린","식사 15분 전.","hi,b"],
+["Insulin detemir","Levemir","Long-acting insulin","기저 인슐린","","hi"],
+["Insulin degludec","Tresiba","Ultra-long insulin","기저 인슐린","","hi"],
+["Insulin NPH","Humulin N / Novolin N","Intermediate insulin","중간형 인슐린","뿌옇다 → 굴려서 섞기.","hi"],
+["Insulin 70/30","Humulin 70/30","Premixed insulin","혼합 인슐린","식전 30분.","hi"],
+["Glucagon","Gvoke / Baqsimi","Antihypoglycemic","심한 저혈당 응급","의식 없을 때, 옆으로 눕히기.",""],
+["Prednisone","Deltasone","Corticosteroid","염증, COPD 악화","혈당↑, 갑자기 끊지 않기(taper).","b"],
+["Methylprednisolone","Medrol","Corticosteroid","Medrol dosepak","",""],
+["Montelukast","Singulair","Leukotriene antagonist","천식·알러지","정신 변화 관찰.",""],
+["Budesonide-formoterol","Symbicort","ICS + LABA","COPD/천식","입 헹굼.","b"],
+["Ipratropium-albuterol","DuoNeb / Combivent","Bronchodilator","COPD 네뷸라이저","",""],
+["Umeclidinium-vilanterol","Anoro Ellipta","LAMA + LABA","COPD","",""],
+["Fluticasone-umeclidinium-vilanterol","Trelegy","Triple inhaler","COPD","하루 1회, 입 헹굼.","b"],
+["Guaifenesin","Mucinex","Expectorant","가래","물 많이.",""],
+["Benzonatate","Tessalon","Antitussive","기침","씹지 않기.",""],
+["Tramadol","Ultram","Opioid (weak)","통증","경련·세로토닌증후군 위험.","hi"],
+["Morphine","MS Contin / Roxanol","Opioid","중증 통증 / hospice","호흡수 확인.","hi"],
+["Hydromorphone","Dilaudid","Opioid","중증 통증","morphine보다 강함.","hi"],
+["Fentanyl patch","Duragesic","Opioid","만성 통증 패치","72시간, 열 노출 금지, 사용 패치 접어서 폐기.","hi"],
+["Naproxen","Aleve","NSAID","진통·소염","",""],
+["Meloxicam","Mobic","NSAID","관절염","",""],
+["Cyclobenzaprine","Flexeril","Muscle relaxant","근육 경련","졸림.","b"],
+["Baclofen","Lioresal","Muscle relaxant","경직 (MS, 척수손상)","갑자기 중단 금지.",""],
+["Tizanidine","Zanaflex","Muscle relaxant","경직","저혈압.",""],
+["Sertraline","Zoloft","SSRI","우울·불안","","b"],
+["Escitalopram","Lexapro","SSRI","우울·불안","","b"],
+["Citalopram","Celexa","SSRI","우울","",""],
+["Fluoxetine","Prozac","SSRI","우울","","b"],
+["Paroxetine","Paxil","SSRI","우울·불안","",""],
+["Venlafaxine","Effexor","SNRI","우울","",""],
+["Bupropion","Wellbutrin","Antidepressant","우울, 금연","경련 위험.","b"],
+["Amitriptyline","Elavil","TCA","신경통, 수면","노인 낙상·혼동.",""],
+["Quetiapine","Seroquel","Antipsychotic","정신증, 수면, 치매 초조","낙상, 졸림.","b"],
+["Olanzapine","Zyprexa","Antipsychotic","정신증","",""],
+["Risperidone","Risperdal","Antipsychotic","정신증, 초조","",""],
+["Haloperidol","Haldol","Antipsychotic","섬망·초조 (hospice)","",""],
+["Alprazolam","Xanax","Benzodiazepine","불안","낙상, 의존.","hi,b"],
+["Clonazepam","Klonopin","Benzodiazepine","불안, 경련","","hi"],
+["Diazepam","Valium","Benzodiazepine","불안, 근경련","","hi"],
+["Zolpidem","Ambien","Sedative-hypnotic","수면","몽유, 낙상.","b"],
+["Memantine","Namenda","NMDA antagonist","중등도~중증 치매","","b"],
+["Rivastigmine patch","Exelon","Cholinesterase inhibitor","치매","패치 부위 교체.",""],
+["Levetiracetam","Keppra","Anticonvulsant","경련","","b"],
+["Phenytoin","Dilantin","Anticonvulsant","경련","혈중농도, 잇몸비대.",""],
+["Divalproex","Depakote","Anticonvulsant","경련, 조울","",""],
+["Lamotrigine","Lamictal","Anticonvulsant","경련, 조울","발진 → 즉시 보고.",""],
+["Ropinirole","Requip","Dopamine agonist","파킨슨, 하지불안","",""],
+["Ondansetron","Zofran","Antiemetic","구역","QT 연장.","b"],
+["Metoclopramide","Reglan","Antiemetic / prokinetic","구역, 위마비","지연성 운동장애.",""],
+["Promethazine","Phenergan","Antiemetic","구역","졸림.",""],
+["Meclizine","Antivert","Antihistamine","어지러움(vertigo)","",""],
+["Diphenhydramine","Benadryl","Antihistamine","알러지, 수면","노인 혼동·소변정체 (Beers list).",""],
+["Hydroxyzine","Atarax / Vistaril","Antihistamine","가려움, 불안","",""],
+["Bisacodyl","Dulcolax","Stimulant laxative","변비 (정제/좌약)","",""],
+["Dicyclomine","Bentyl","Antispasmodic","IBS 복통","",""],
+["Sucralfate","Carafate","GI protectant","위궤양","다른 약과 2시간 간격.",""],
+["Calcium carbonate","Tums","Antacid / calcium","속쓰림, 칼슘","",""],
+["Nitrofurantoin","Macrobid","Antibiotic","UTI","음식과 함께, 소변 갈색 정상.","b"],
+["Ciprofloxacin","Cipro","Fluoroquinolone","UTI 등","힘줄 파열, 제산제 간격.","b"],
+["Levofloxacin","Levaquin","Fluoroquinolone","폐렴 등","힘줄.",""],
+["Azithromycin","Zithromax (Z-Pak)","Macrolide","호흡기 감염","","b"],
+["Metronidazole","Flagyl","Antibiotic","C. diff, 혐기균","술 금지.",""],
+["Vancomycin","Vancocin","Glycopeptide","C. diff(경구) / IV 감염","IV는 trough 수치.",""],
+["Ceftriaxone","Rocephin","Cephalosporin","IV/IM 감염","Home infusion.",""],
+["Fluconazole","Diflucan","Antifungal","칸디다","",""],
+["Nystatin","Mycostatin","Antifungal","구강 칸디다","입에 머금었다 삼키기.",""],
+["Mupirocin","Bactroban","Topical antibiotic","피부 감염","",""],
+["Silver sulfadiazine","Silvadene","Topical antibiotic","화상","",""],
+["Hydrocortisone cream","Cortaid","Topical steroid","가려움, 피부염","",""],
+["Latanoprost","Xalatan","Ophthalmic prostaglandin","녹내장","저녁, 홍채색 변화.",""],
+["Timolol eye drop","Timoptic","Ophthalmic beta blocker","녹내장","",""],
+["Alendronate","Fosamax","Bisphosphonate","골다공증","주 1회 아침 공복, 물 한 컵, 30분 서있기.","b"],
+["Furosemide IV","Lasix IV","Loop diuretic","IV 이뇨","",""],
+["Potassium citrate","Urocit-K","Alkalinizer","신장결석","",""],
+["Sevelamer","Renvela","Phosphate binder","투석 환자 인 조절","식사와 함께.",""],
+["Calcitriol","Rocaltrol","Vitamin D (active)","CKD","",""],
+["Epoetin alfa","Epogen / Procrit","ESA","CKD 빈혈","혈압↑.",""],
+["Bethanechol","Urecholine","Cholinergic","소변정체","",""],
+["Mirabegron","Myrbetriq","Beta-3 agonist","과민성 방광","",""],
+["Megestrol","Megace","Appetite stimulant","식욕 증진","혈전 위험.",""],
+["Dronabinol","Marinol","Cannabinoid","식욕, 구역","",""],
+["Lorazepam SL","Ativan","Benzodiazepine","hospice 불안·호흡곤란","","hi"],
+["Atropine 1% drops SL","Isopto Atropine","Anticholinergic","hospice 분비물(death rattle)","",""],
+["Scopolamine patch","Transderm Scop","Anticholinergic","멀미, 분비물","귀 뒤, 3일.",""],
+["Normal saline flush","NS 0.9%","IV flush","PICC/IV 관리","SASH: Saline-Admin-Saline-Heparin.",""],
+["Citric acid/Na citrate","Bicitra","Alkalinizer","신세뇨관 산증","",""]
+];
+const SPK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>';
+const clean=t=>t.replace(/\(.*?\)/g,"").replace(/[\/]/g,", ").replace(/-/g," ").replace(/\bER\b/g,"E R").replace(/\bIV\b/g,"I V").replace(/\bAPAP\b/g,"acetaminophen").replace(/\bTMP\b/g,"trimethoprim").replace(/\bHCTZ\b/g,"hydrochlorothiazide").trim();
+const sb=(t,l)=>t&&t!=="—"?`<button class="say" data-say="${t.replace(/"/g,"")}" aria-label="Play ${l}: ${t.replace(/"/g,"")}">${SPK}</button>`:"";
+let voice=null;function pickVoice(){const v=speechSynthesis.getVoices().filter(x=>/^en[-_]US/i.test(x.lang));voice=v.find(x=>/Samantha|Google US|Aria|Jenny/i.test(x.name))||v[0]||null}
+if("speechSynthesis" in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+let lastSaid="",lastT=0;
+function say(t,btn){if(!("speechSynthesis" in window))return;speechSynthesis.cancel();const now=Date.now(),slow=(t===lastSaid&&now-lastT<4000);lastSaid=t;lastT=now;
+const u=new SpeechSynthesisUtterance(clean(t));u.lang="en-US";if(voice)u.voice=voice;u.rate=slow?0.55:0.85;
+document.querySelectorAll(".say.play").forEach(b=>b.classList.remove("play"));if(btn){btn.classList.add("play");u.onend=u.onerror=()=>btn.classList.remove("play")}speechSynthesis.speak(u)}
+document.addEventListener("click",e=>{const b=e.target.closest(".say");if(b){e.stopPropagation();say(b.dataset.say,b)}},true);
+const $=s=>document.querySelector(s);
+const cls=[...new Set(D.map(d=>d[2]))].sort();
+$("#cls").innerHTML='<option value="">All classes ('+D.length+')</option>'+cls.map(c=>`<option>${c}</option>`).join("");
+const tags=f=>(f.includes("hi")?'<span class="tag hi">HIGH ALERT</span>':'')+(f.includes("b")?'<span class="tag">BRAND≈GENERIC</span>':'');
+function filt(){const q=$("#q").value.toLowerCase(),c=$("#cls").value;return D.filter(d=>(!c||d[2]===c)&&(!q||d.join(" ").toLowerCase().includes(q)))}
+function render(){const r=filt(),g={};r.forEach(d=>(g[d[2]]=g[d[2]]||[]).push(d));
+$("#list").innerHTML=Object.keys(g).sort().map(k=>`<h2>${k}</h2>`+g[k].map(d=>`<div class="row"><div><div class="g">${d[0]}${sb(d[0],"generic")}${tags(d[5])}</div><div class="b">${d[1]}${sb(d[1],"brand")}</div></div><div><div class="ko">${d[3]}</div>${d[4].trim()?`<div class="tip">${d[4]}</div>`:''}</div></div>`).join("")).join("")||'<p class="sub">검색 결과가 없어요.</p>';
+deck=r.slice();i=0;show()}
+let deck=[],i=0,flip=false;
+function show(){if(!deck.length){$("#card").innerHTML="—";$("#pos").textContent="0/0";return}const d=deck[i];
+$("#card").innerHTML=flip?`<div class="a"><div class="b" style="font-size:1.4rem">${d[1]}${sb(d[1],"brand")}</div><div>${d[2]}</div><div class="ko">${d[3]}</div><div class="tip">${d[4]}</div></div>`:`<div class="q">${d[0]}${sb(d[0],"generic")}</div>`;
+$("#pos").textContent=(i+1)+"/"+deck.length}
+$("#card").onclick=()=>{flip=!flip;show()};$("#card").onkeydown=e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();flip=!flip;show()}};
+$("#next").onclick=()=>{i=(i+1)%deck.length;flip=false;show()};$("#prev").onclick=()=>{i=(i-1+deck.length)%deck.length;flip=false;show()};
+$("#shuf").onclick=()=>{deck.sort(()=>Math.random()-.5);i=0;flip=false;show()};
+$("#q").oninput=render;$("#cls").onchange=render;
+$("#mList").onclick=()=>{$("#list").hidden=false;$("#cards").hidden=true;$("#mList").classList.add("on");$("#mCard").classList.remove("on")};
+$("#mCard").onclick=()=>{$("#list").hidden=true;$("#cards").hidden=false;$("#mCard").classList.add("on");$("#mList").classList.remove("on")};
+render();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js");
+</script>
+
+</body></html>
